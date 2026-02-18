@@ -1,3 +1,10 @@
 {
-  "placeholderImages": []
+  "placeholderImages": [
+    {
+      "id": "hero-party",
+      "description": "A vibrant party scene with people celebrating.",
+      "imageUrl": "https://images.unsplash.com/photo-1770805001834-f9ccd734c6fb?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw3fHxwYXJ0eSUyMGNlbGVicmF0aW9ufGVufDB8fHx8MTc3MTM3OTc4MXww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "party celebration"
+    }
+  ]
 }
