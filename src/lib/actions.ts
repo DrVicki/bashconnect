@@ -1,24 +1,22 @@
-// @ts-nocheck
 'use server';
 
-import { redirect } from 'next/navigation';
 import { addDoc, arrayUnion, collection, doc, serverTimestamp, updateDoc } from 'firebase/firestore';
-import { db } from './firebase';
 import { revalidatePath } from 'next/cache';
 import { suggestPartyActivities, type AiActivitySuggestionInput } from '@/ai/flows/ai-activity-suggestion-flow';
+import { db } from './firebase';
 
 export async function createPartyAction(data: {
   name: string;
   date: string;
   time: string;
-  description: string;
+  description?: string;
 }) {
   try {
     const docRef = await addDoc(collection(db, 'parties'), {
       name: data.name,
       date: data.date,
       time: data.time,
-      description: data.description,
+      description: data.description || '',
       createdAt: serverTimestamp(),
       participants: [],
     });
