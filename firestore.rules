@@ -21,10 +21,8 @@
  *   data requires authentication and membership in a specific party to be accessed.
  *
  * Denormalization for Authorization:
- * - Party Ownership: The `/parties/{partyId}` document is expected to contain an
- *   `ownerId` field. This is critical for granting host-level permissions.
- *   (NOTE: This field was missing from the provided schema, so write rules are
- *   currently disabled with a TODO note pending its addition).
+ * - Party Ownership: The `/parties/{partyId}` document contains an `ownerId` 
+ *   field, which is critical for granting host-level permissions.
  * - Message Ownership: Each document in `/chatMessages` contains a `senderId`
  *   to clearly attribute message ownership for edit/delete permissions.
  *
@@ -90,8 +88,8 @@ service cloud.firestore {
     match /parties/{partyId} {
       allow get: if isPartyMember(partyId);
       allow list: if isSignedIn();
-      // CRITICAL: Cannot implement owner-only writes. The 'Party' entity is missing an 'ownerId' field.
-      allow create, update, delete: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
+      allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
+      allow update, delete: if isSignedIn() && resource.data.ownerId == request.auth.uid;
     }
 
     /**

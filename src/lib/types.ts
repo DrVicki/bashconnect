@@ -6,18 +6,22 @@ export interface Party {
   date: string;
   time: string;
   description: string;
+  ownerId: string;
   createdAt: Timestamp;
-  participants: Participant[];
 }
 
 export interface Participant {
-  name: string;
-  joinedAt: Timestamp;
+  id: string;
+  partyId: string;
+  displayName: string;
+  joinTime: Timestamp;
 }
 
 export interface Message {
-  id: string;
-  text: string;
-  sender: string;
-  createdAt: Timestamp;
+  id:string;
+  partyId: string;
+  senderId: string;
+  content: string;
+  timestamp: Timestamp;
+  senderDisplayName: string;
 }

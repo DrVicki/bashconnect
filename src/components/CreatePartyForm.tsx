@@ -7,11 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { createPartyAction } from "@/lib/actions";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useFirestore, useUser, addDocumentNonBlocking } from "@/firebase";
+import { collection, serverTimestamp } from "firebase/firestore";
 
 const formSchema = z.object({
   name: z.string().min(3, "Party name must be at least 3 characters.").max(100),
@@ -24,6 +25,8 @@ export function CreatePartyForm() {
   const router = useRouter();
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
+  const firestore = useFirestore();
+  const { user } = useUser();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -36,17 +39,28 @@ export function CreatePartyForm() {
   });
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
+    if (!firestore || !user) {
+        toast({ title: "Authentication required", description: "Please wait a moment and try again.", variant: "destructive" });
+        return;
+    }
+      
     startTransition(async () => {
-      const result = await createPartyAction(values);
-      if (result.success && result.partyId) {
+      const partyData = {
+        name: values.name,
+        date: values.date,
+        time: values.time,
+        description: values.description || "",
+        ownerId: user.uid,
+        createdAt: serverTimestamp(),
+      };
+      
+      const docRef = await addDocumentNonBlocking(collection(firestore, 'parties'), partyData);
+
+      if (docRef) {
         toast({ title: "Party Created!", description: "Your party is ready to be shared." });
-        router.push(`/party/${result.partyId}`);
+        router.push(`/party/${docRef.id}`);
       } else {
-        toast({
-          title: "Uh oh!",
-          description: result.error || "Something went wrong.",
-          variant: "destructive",
-        });
+        // Error is handled by the global error handler via non-blocking update
       }
     });
   }
@@ -108,7 +122,7 @@ export function CreatePartyForm() {
             </FormItem>
           )}
         />
-        <Button type="submit" className="w-full font-bold" size="lg" disabled={isPending}>
+        <Button type="submit" className="w-full font-bold" size="lg" disabled={isPending || !user}>
           {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           {isPending ? 'Creating Party...' : 'Create Party & Get Link'}
         </Button>

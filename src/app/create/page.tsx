@@ -4,8 +4,19 @@ import { CreatePartyForm } from "@/components/CreatePartyForm";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { useAuth, useUser, initiateAnonymousSignIn } from "@/firebase";
+import { useEffect } from "react";
 
 export default function CreatePartyPage() {
+  const { user, isUserLoading } = useUser();
+  const auth = useAuth();
+
+  useEffect(() => {
+    if (!isUserLoading && !user && auth) {
+      initiateAnonymousSignIn(auth);
+    }
+  }, [user, isUserLoading, auth]);
+
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-2xl">

@@ -1,32 +1,53 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState, useTransition, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { addParticipantAction } from '@/lib/actions';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, PartyPopper } from 'lucide-react';
+import { useAuth, useFirestore, useUser, initiateAnonymousSignIn, setDocumentNonBlocking } from '@/firebase';
+import { doc, serverTimestamp } from 'firebase/firestore';
 
 export default function JoinPartyDialog({ partyId, onJoin }: { partyId: string; onJoin: (name: string) => void }) {
   const [name, setName] = useState('');
   const [isPending, startTransition] = useTransition();
   const { toast } = useToast();
+  const auth = useAuth();
+  const firestore = useFirestore();
+  const { user, isUserLoading } = useUser();
+  const [joinAttempt, setJoinAttempt] = useState(false);
+
+  useEffect(() => {
+    if (joinAttempt && user && firestore) {
+      const participantRef = doc(firestore, 'parties', partyId, 'participants', user.uid);
+      const participantData = {
+        id: user.uid,
+        partyId: partyId,
+        displayName: name.trim(),
+        joinTime: serverTimestamp(),
+      };
+      setDocumentNonBlocking(participantRef, participantData, { merge: true });
+      toast({ title: `Welcome, ${name.trim()}!`, description: 'You have successfully joined the party.' });
+      onJoin(name.trim());
+      setJoinAttempt(false); // Reset attempt
+    }
+  }, [joinAttempt, user, firestore, partyId, name, onJoin, toast]);
+
 
   const handleJoin = () => {
     if (name.trim().length < 2) {
       toast({ title: 'Name is too short', description: 'Please enter a name with at least 2 characters.', variant: 'destructive' });
       return;
     }
+    
+    if (!auth) return;
 
-    startTransition(async () => {
-      const result = await addParticipantAction(partyId, name.trim());
-      if (result.success) {
-        toast({ title: `Welcome, ${name.trim()}!`, description: 'You have successfully joined the party.' });
-        onJoin(name.trim());
-      } else {
-        toast({ title: 'Error joining party', description: result.error, variant: 'destructive' });
-      }
+    startTransition(() => {
+        setJoinAttempt(true);
+        if (!user) {
+            initiateAnonymousSignIn(auth);
+        }
     });
   };
 
@@ -53,8 +74,8 @@ export default function JoinPartyDialog({ partyId, onJoin }: { partyId: string; 
           />
         </div>
         <DialogFooter>
-          <Button type="button" onClick={handleJoin} className="w-full font-bold" disabled={isPending}>
-            {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+          <Button type="button" onClick={handleJoin} className="w-full font-bold" disabled={isPending || isUserLoading}>
+            {(isPending || isUserLoading) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Join the Party
           </Button>
         </DialogFooter>

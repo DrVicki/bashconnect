@@ -23,6 +23,10 @@
           "description": "The date and time when the party is scheduled to occur.",
           "format": "date-time"
         },
+        "ownerId": {
+          "type": "string",
+          "description": "The Firebase UID of the user who created the party (the host)."
+        },
         "inviteCode": {
           "type": "string",
           "description": "A unique, shareable code used by guests to join the party without authentication."
@@ -49,6 +53,7 @@
         "id",
         "name",
         "dateTime",
+        "ownerId",
         "inviteCode",
         "createdAt"
       ]
@@ -212,7 +217,7 @@
           "schema": {
             "$ref": "#/backend/entities/ChatMessage"
           },
-          "description": "Subcollection storing individual chat messages for a specific party. Each message includes 'senderId' (the participant's UID) for explicit message attribution and authorization. Denormalizes 'partyId' via the path.",
+          "description": "Subcollection storing individual chat messages for a specific party. Each message includes 'senderId' (the participant's UID) for explicit message ownership and authorization. Denormalizes 'partyId' via the path.",
           "params": [
             {
               "name": "partyId",
