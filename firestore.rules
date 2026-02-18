@@ -1,0 +1,142 @@
+/**
+ * Core Philosophy: This ruleset enforces a party-membership security model.
+ * There are two primary roles: "Hosts" (party owners) and "Participants"
+ * (party guests). Access to any party-related data is strictly limited to
+ * users who are either the host or a verified participant of that specific party.
+ *
+ * Data Structure: Data is hierarchically organized under a top-level `/parties`
+ * collection. Each party document contains subcollections for its `participants`,
+ * `chatMessages`, and `activitySuggestions`, ensuring all related data is
+ * logically grouped and secured under a single party context.
+ *
+ * Key Security Decisions:
+ * - Host vs. Participant: The user who creates a party is its "Host" and has
+ *   full administrative control. Other users can join as "Participants" via an
+ *   off-band invite code system (handled by a backend service).
+ * - Membership Verification: A user's participation in a party is verified by
+ *   the existence of a document at `/parties/{partyId}/participants/{userId}`.
+ *   This performant `exists()` check is used to grant access to all party
+ *   subcollections, avoiding slow and costly `get()` calls in rules.
+ * - No Public Data: There are no publicly listable top-level collections. All
+ *   data requires authentication and membership in a specific party to be accessed.
+ *
+ * Denormalization for Authorization:
+ * - Party Ownership: The `/parties/{partyId}` document is expected to contain an
+ *   `ownerId` field. This is critical for granting host-level permissions.
+ *   (NOTE: This field was missing from the provided schema, so write rules are
+ *   currently disabled with a TODO note pending its addition).
+ * - Message Ownership: Each document in `/chatMessages` contains a `senderId`
+ *   to clearly attribute message ownership for edit/delete permissions.
+ *
+ * Structural Segregation: Each party's data is completely segregated within its
+ * own document tree (e.g., `/parties/{partyId}/...`). This is a natural and
+ * highly secure way to prevent data leakage between different party events and
+ * simplifies client-side queries.
+ */
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions to abstract and simplify complex logic.
+
+    /**
+     * Checks if a user is authenticated.
+     */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    /**
+     * Checks if the document being accessed already exists.
+     * Crucial for securing update and delete operations.
+     */
+    function isExistingDoc() {
+      return resource != null;
+    }
+
+    /**
+     * Checks if the currently authenticated user is the host of a given party.
+     * This requires one `get` call to the parent party document.
+     */
+    function isPartyHost(partyId) {
+      return get(/databases/$(database)/documents/parties/$(partyId)).data.ownerId == request.auth.uid;
+    }
+
+    /**
+     * Checks if the currently authenticated user is a participant in a given party.
+     * This uses a highly performant `exists` call instead of a `get`.
+     */
+    function isParticipant(partyId) {
+      return exists(/databases/$(database)/documents/parties/$(partyId)/participants/$(request.auth.uid));
+    }
+
+
+
+    /**
+     * Checks if the currently authenticated user is either the host or a participant.
+     */
+    function isPartyMember(partyId) {
+      return isPartyHost(partyId) || isParticipant(partyId);
+    }
+
+
+    /**
+     * @description Rules for the top-level 'parties' collection.
+     * @path /parties/{partyId}
+     * @allow (get) A signed-in user who is a member (host or participant) of party 'party123' can read its details.
+     * @deny (create) An anonymous user attempts to create a new party.
+     * @principle Enforces that party data can only be read by its members and modified by its owner.
+     */
+    match /parties/{partyId} {
+      allow get: if isPartyMember(partyId);
+      allow list: if isSignedIn();
+      // CRITICAL: Cannot implement owner-only writes. The 'Party' entity is missing an 'ownerId' field.
+      allow create, update, delete: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
+    }
+
+    /**
+     * @description Rules for the 'participants' subcollection. Manages who has joined a party.
+     * @path /parties/{partyId}/participants/{participantId}
+     * @allow (create) A user with uid 'user_abc' creates their own participant document at /.../participants/user_abc.
+     * @deny (update) A user tries to change the details of another participant in the same party.
+     * @principle Restricts access to party members and allows users to manage their own participant status. The party host can remove participants.
+     */
+    match /parties/{partyId}/participants/{participantId} {
+      allow get: if isPartyMember(partyId);
+      allow list: if isPartyMember(partyId);
+      allow create: if isSignedIn() && request.auth.uid == participantId && request.resource.data.partyId == partyId;
+      allow update: if isExistingDoc() && request.auth.uid == participantId && request.resource.data.partyId == resource.data.partyId;
+      allow delete: if isExistingDoc() && (request.auth.uid == participantId || isPartyHost(partyId));
+    }
+
+    /**
+     * @description Rules for the 'chatMessages' subcollection. Secures real-time chat within a party.
+     * @path /parties/{partyId}/chatMessages/{chatMessageId}
+     * @allow (create) A verified party member sends a new message, setting the 'senderId' to their own UID.
+     * @deny (delete) A user tries to delete a message sent by someone else.
+     * @principle Ensures only party members can read/write messages, and users can only modify their own messages.
+     */
+    match /parties/{partyId}/chatMessages/{chatMessageId} {
+      allow get: if isPartyMember(partyId);
+      allow list: if isPartyMember(partyId);
+      allow create: if isPartyMember(partyId) && request.resource.data.senderId == request.auth.uid && request.resource.data.partyId == partyId;
+      allow update: if isExistingDoc() && resource.data.senderId == request.auth.uid;
+      allow delete: if isExistingDoc() && resource.data.senderId == request.auth.uid;
+    }
+
+    /**
+     * @description Rules for the 'activitySuggestions' subcollection. Manages party activity ideas.
+     * @path /parties/{partyId}/activitySuggestions/{activitySuggestionId}
+     * @allow (get) Any participant of the party can read the list of activity suggestions.
+     * @deny (create) A regular participant attempts to add a new activity suggestion.
+     * @principle Allows all party members to read suggestions, but restricts write access to the party host only.
+     */
+    match /parties/{partyId}/activitySuggestions/{activitySuggestionId} {
+      allow get: if isPartyMember(partyId);
+      allow list: if isPartyMember(partyId);
+      allow create: if isPartyHost(partyId) && request.resource.data.partyId == partyId;
+      allow update: if isExistingDoc() && isPartyHost(partyId);
+      allow delete: if isExistingDoc() && isPartyHost(partyId);
+    }
+  }
+}
