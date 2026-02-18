@@ -13,7 +13,8 @@ import * as z from 'zod';
 import { getAiSuggestionsAction } from '@/lib/actions';
 import type { AiActivitySuggestionOutput } from '@/ai/flows/ai-activity-suggestion-flow';
 import { Loader2, Wand2, Lightbulb, Package, Clock } from 'lucide-react';
-import { ScrollArea } from './ui/scroll-area';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
 
 const formSchema = z.object({
   partyType: z.string().min(1, 'Please select a party type.'),
