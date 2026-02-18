@@ -1,3 +1,5 @@
+'use client';
+
 import { CreatePartyForm } from "@/components/CreatePartyForm";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
